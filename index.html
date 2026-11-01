@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Sweet Slide — 第6版（マージ先指定・Undo対応）</title>
+<style>
+:root{--mint:#b3c7bb;--deep:#07586b;--aqua:#8bd8cf;--pale:#e0f3e9;--wood:#c9824c;--wood-dark:#a85f35;--wood-light:#edb27b}
+*{box-sizing:border-box}html{background:var(--mint)}body{margin:0;min-height:100svh;background:linear-gradient(#b5c9bd,#a9c1b4);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Hiragino Kaku Gothic ProN",Meiryo,sans-serif;color:#174f5a;display:flex;justify-content:center;overscroll-behavior:none}
+.app{width:min(100%,500px);padding:13px 12px 20px;display:flex;flex-direction:column;gap:10px}
+h1{margin:2px 0 0;text-align:center;font-size:clamp(30px,8vw,43px);line-height:1.1;letter-spacing:-.7px;font-weight:1000;color:#fff0a8;-webkit-text-stroke:1.3px var(--deep);paint-order:stroke fill;text-shadow:2px 3px 0 var(--deep),0 5px 0 #0b6170}
+.subtitle{text-align:center;font-size:12px;font-weight:650;margin:0 0 1px;color:#315f5b}
+.hud{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.stat{background:#d9eee4;border:2px solid #82c9be;border-radius:13px;text-align:center;padding:5px 3px;box-shadow:inset 0 2px 0 #ffffffb8,0 2px 0 #8eb7aa}.stat small{display:block;font-size:10px;letter-spacing:.04em}.stat strong{font-size:20px;line-height:1.2;font-variant-numeric:tabular-nums}
+.frame{background:#d6f0e8;border:4px solid #8bd8cf;border-radius:23px;padding:7px;box-shadow:0 5px 0 #78b8b0,inset 0 2px 3px #fff;user-select:none;-webkit-user-select:none}
+.board{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(10,minmax(0,1fr));gap:3px;padding:3px;aspect-ratio:6/10;width:100%;position:relative;overflow:hidden;border-radius:13px;background:#a9c8bb;touch-action:none;isolation:isolate}
+.cell{grid-column:var(--x);grid-row:var(--y);border-radius:5px;background:#7f9f8d25;border:1px solid #ffffff20;min-width:0;min-height:0}
+.block{grid-column:var(--gx)/span 2;grid-row:var(--gy)/span 2;z-index:2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(2,minmax(0,1fr));gap:3px;padding:4px;border-radius:12px;border:2px solid var(--wood-dark);background:repeating-linear-gradient(90deg,#bf7946 0,#d18b53 6px,#d99760 11px,#b9703e 18px);box-shadow:inset 0 2px 0 #ffd6a3,0 2px 2px #668f7e;cursor:grab;touch-action:none;min-width:0;min-height:0;position:relative;transition:filter .1s;}
+.block:before{content:"";position:absolute;inset:3px;border:1px solid #f3bd85a8;border-radius:7px;pointer-events:none}.block:active{cursor:grabbing}.block.dragging{z-index:10;filter:drop-shadow(0 5px 4px #416b5b70);transition:none}.block.selected{outline:3px solid #fff0a3;outline-offset:0;z-index:5}
+.candy{position:relative;z-index:1;display:flex;align-items:center;justify-content:center;min-width:0;min-height:0;border-radius:50%;border:2px solid #4c9e99;background:radial-gradient(circle at 34% 22%,#f0fff6 0,#b9f0e2 38%,#81d0c7 72%,#4ca9a3 100%);box-shadow:inset 0 2px 2px #fff,0 2px 0 #418d87;font-size:clamp(17px,5vw,29px);line-height:1;overflow:hidden;text-shadow:0 1px 1px #ffffff80}.candy.empty{background:#c0d9cc42;border:1px dashed #e7fff155;box-shadow:none}.candy .emoji{filter:drop-shadow(0 1px 1px #5b665b45)}
+.message{background:#d9ebe1;border:1px solid #a2d2c4;border-radius:12px;padding:9px 11px;font-size:12px;line-height:1.45;min-height:38px}.controls{display:flex;gap:8px}.btn{flex:1;border:0;border-radius:13px;padding:11px 10px;font:800 14px inherit;font-size:14px;font-weight:850;color:white;background:#187e86;box-shadow:0 3px 0 #0e5c67;cursor:pointer}.btn.secondary{background:#e5f4eb;color:#22636a;border:2px solid #91cabe;box-shadow:0 2px 0 #a3c4b7}.btn:active{transform:translateY(2px);box-shadow:none}.btn:focus-visible{outline:3px solid #fff0a3;outline-offset:2px}
+.legend{display:flex;justify-content:center;flex-wrap:wrap;gap:4px}.legend span{font-size:11px;background:#e1f2e8;border:1px solid #a0cfc1;border-radius:999px;padding:3px 7px;white-space:nowrap}.rules{font-size:11px;line-height:1.55;padding:0 2px;color:#315d56}.overlay{position:fixed;inset:0;background:#143f42b8;display:none;align-items:center;justify-content:center;padding:20px;z-index:30}.modal{width:min(100%,330px);padding:23px 20px;background:#e4f4eb;border:4px solid var(--aqua);border-radius:23px;box-shadow:0 7px 0 #276d70;text-align:center}.modal h2{margin:0 0 8px;font-size:27px;color:var(--deep)}.modal p{font-size:14px;line-height:1.5}.modal .btn{width:100%}
+@media(min-width:430px){.app{padding-top:18px;gap:12px}.board{gap:4px}.block{gap:4px;padding:5px}.candy{font-size:28px}}
+@media(max-height:720px) and (max-width:600px){.app{padding-top:8px;gap:7px}.board{aspect-ratio:6/9.2}.rules{font-size:10px}}
+</style>
+</head>
+<body>
+<main class="app">
+<h1>Sweet Slide!</h1>
+<p class="subtitle">第6版 — マージ先指定・Undo対応</p>
+<p class="subtitle">木製ブロックをスライドして、お菓子を進化させよう</p>
+<section class="hud" aria-label="ゲーム情報">
+ <div class="stat"><small>スコア</small><strong id="score">0</strong></div>
+ <div class="stat"><small>マージ</small><strong id="merges">0</strong></div>
+ <div class="stat"><small>残りブロック</small><strong id="blockCount">12</strong></div>
+</section>
+<div class="frame"><div id="board" class="board" role="application" aria-label="スライドパズル盤面"></div></div>
+<div class="legend" id="legend" aria-label="お菓子の進化"></div>
+<div id="message" class="message" aria-live="polite">木製ブロックを空いている2×2の場所へドラッグしてください。同じお菓子が隣接するとマージします。</div>
+<div class="controls"><button id="undo" class="btn secondary" disabled>Undo</button><button id="restart" class="btn">最初から</button><button id="hint" class="btn secondary">ヒント</button></div>
+<div class="rules"><b>遊び方</b><br>・木製ブロックを上下左右にドラッグ。空いている場所を通って移動できます。<br>・同じお菓子が上下左右で接すると、動かしたブロック側のお菓子が、動かしていない側のスロットへマージします。連鎖マージも発生します。<br>・最高ランク同士をマージすると両方消えます。盤面のお菓子をすべて消すとクリアです。</div>
+</main>
+<div class="overlay" id="overlay" role="dialog" aria-modal="true" aria-labelledby="endTitle"><div class="modal"><h2 id="endTitle">クリア！</h2><p id="endText"></p><button id="undoEnd" class="btn secondary" style="margin-bottom:9px">直前の移動を取り消す</button><button id="again" class="btn">もう一度遊ぶ</button></div></div>
+<script>
+'use strict';
+const COLS=6,ROWS=10,MACRO=2;
+const sweets=[
+ {e:'🍭',n:'キャンディ'},{e:'🍦',n:'アイス'},{e:'🍩',n:'ドーナツ'},{e:'🧁',n:'カップケーキ'},
+ {e:'🍰',n:'ケーキ'},{e:'🎂',n:'ホールケーキ'},{e:'🍮',n:'プリン'},{e:'🍨',n:'パフェ'},{e:'🍓',n:'いちごスイーツ'}
+];
+const board=document.getElementById('board');
+let blocks=[],score=0,mergeCount=0,nextId=1,drag=null,selectedId=null,ended=false,history=[];
+const key=(x,y)=>`${x},${y}`;
+function occupied(exceptId=null){const cells=new Set();for(const b of blocks){if(b.id===exceptId)continue;cells.add(key(b.x,b.y));}return cells;}
+function canPlace(x,y,id){if(x<0||y<0||x>COLS-2||y>ROWS-2||x%2!==0||y%2!==0)return false;return !occupied(id).has(key(x,y));}
+function canSlide(b,nx,ny){if(nx!==b.x&&ny!==b.y)return false;const dx=Math.sign(nx-b.x),dy=Math.sign(ny-b.y);let x=b.x,y=b.y;if(dx===0&&dy===0)return false;while(x!==nx||y!==ny){x+=dx*2;y+=dy*2;if(!canPlace(x,y,b.id))return false;}return true;}
+function initialCandyMap(gapKeys) {
+  const map = new Map();
+
+  // o/xそれぞれのランク別個数
+  const quota = [
+    [5, 5, 5, 4, 5], // o
+    [5, 5, 5, 4, 5]  // x
+  ];
+
+  const cells = [];
+
+  // 空きスペース以外のセルを収集
+  for (let y = 0; y < ROWS; y++) {
+    for (let x = 0; x < COLS; x++) {
+      const gx = Math.floor(x / 2);
+      const gy = Math.floor(y / 2);
+
+      if (!gapKeys.has(`${gx},${gy}`)) {
+        cells.push({
+          x,
+          y,
+          parity: (x + y) % 2
+        });
+      }
+    }
+  }
+
+  // 配列をランダムに並べ替える
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+    return array;
+  }
+
+  // 条件を満たすランク配置を再帰的に探索
+  function solve(index) {
+    if (index === cells.length) {
+      return true;
+    }
+
+    const { x, y, parity } = cells[index];
+
+    // すでに配置済みの上下左右のセルを調べる
+    const forbidden = new Set(
+      [
+        map.get(key(x - 1, y)),
+        map.get(key(x + 1, y)),
+        map.get(key(x, y - 1)),
+        map.get(key(x, y + 1))
+      ].filter(v => v !== undefined)
+    );
+
+    // ランクの試行順をランダム化
+    const candidates = shuffle([0, 1, 2, 3, 4]);
+
+    for (const value of candidates) {
+      if (quota[parity][value] <= 0) continue;
+      if (forbidden.has(value)) continue;
+
+      map.set(key(x, y), value);
+      quota[parity][value]--;
+
+      if (solve(index + 1)) {
+        return true;
+      }
+
+      // この配置では解けない場合、元に戻す
+      quota[parity][value]++;
+      map.delete(key(x, y));
+    }
+
+    return false;
+  }
+
+  if (!solve(0)) {
+    throw new Error(
+      '初期配置を生成できませんでした。ランク別の個数設定を確認してください。'
+    );
+  }
+
+  // 生成結果の検証
+  const counts = [
+    [0, 0, 0, 0, 0],
+    [0, 0, 0, 0, 0]
+  ];
+
+  for (const { x, y, parity } of cells) {
+    const value = map.get(key(x, y));
+    counts[parity][value]++;
+
+    // 横隣接チェック
+    if (x + 1 < COLS && map.get(key(x + 1, y)) === value) {
+      throw new Error('初期配置に横隣接マッチがあります。');
+    }
+
+    // 縦隣接チェック
+    if (y + 1 < ROWS && map.get(key(x, y + 1)) === value) {
+      throw new Error('初期配置に縦隣接マッチがあります。');
+    }
+  }
+
+  // o/xの個数がランクごとに一致するか確認
+  for (let rank = 0; rank < 5; rank++) {
+    if (counts[0][rank] !== counts[1][rank]) {
+      throw new Error(`ランク${rank}のo/x個数が一致しません。`);
+    }
+  }
+
+  return map;
+}
+function init(){
+ blocks=[];score=0;mergeCount=0;nextId=1;drag=null;selectedId=null;ended=false;history=[];
+ // 3列×5行の2×2ブロック配置。3か所の空きスペースを維持する。
+ const gaps=new Set(['1,2','1,3','0,3']);
+ const candyMap=initialCandyMap(gaps);
+ for(let gy=0;gy<5;gy++)for(let gx=0;gx<3;gx++)if(!gaps.has(`${gx},${gy}`)){
+  const vals=[];
+  for(let yy=0;yy<2;yy++)for(let xx=0;xx<2;xx++)vals.push(candyMap.get(key(gx*2+xx,gy*2+yy)));
+  blocks.push({id:nextId++,x:gx*2,y:gy*2,vals});
+ }
+ document.getElementById('overlay').style.display='none';
+ say('木製ブロックを空いている2×2の場所へドラッグしてください。同じお菓子が隣接するとマージします。');render();
+}
+function render(){
+ board.innerHTML='';
+ for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const c=document.createElement('div');c.className='cell';c.style.setProperty('--x',x+1);c.style.setProperty('--y',y+1);board.appendChild(c);}
+ for(const b of blocks){
+  const el=document.createElement('div');el.className='block'+(selectedId===b.id?' selected':'');el.dataset.id=b.id;el.style.setProperty('--gx',b.x+1);el.style.setProperty('--gy',b.y+1);el.setAttribute('aria-label','木製ブロック');
+  b.vals.forEach((v,i)=>{const tile=document.createElement('div');tile.className='candy'+(v<0?' empty':'');tile.dataset.tile=i;if(v>=0){const em=document.createElement('span');em.className='emoji';em.textContent=sweets[v].e;tile.appendChild(em);}el.appendChild(tile);});
+  el.addEventListener('pointerdown',startDrag);board.appendChild(el);
+ }
+ document.getElementById('score').textContent=score;document.getElementById('merges').textContent=mergeCount;document.getElementById('blockCount').textContent=blocks.length;document.getElementById('undo').disabled=history.length===0;
+ document.getElementById('legend').innerHTML=sweets.slice(0,6).map(s=>`<span>${s.e} ${s.n}</span>`).join('');
+}
+function say(msg){document.getElementById('message').textContent=msg;}
+function startDrag(e){
+ if(ended||drag)return;const el=e.currentTarget,b=blocks.find(q=>q.id===Number(el.dataset.id));if(!b)return;
+ e.preventDefault();selectedId=b.id;el.classList.add('dragging');
+ const br=board.getBoundingClientRect();const style=getComputedStyle(board);const gap=parseFloat(style.gap)||3;const pad=parseFloat(style.paddingLeft)||3;
+ const cellW=(br.width-pad*2-gap*(COLS-1))/COLS;const cellH=(br.height-pad*2-gap*(ROWS-1))/ROWS;
+ drag={id:b.id,el,startX:e.clientX,startY:e.clientY,origX:b.x,origY:b.y,cellW:cellW+gap,cellH:cellH+gap,dx:0,dy:0,moved:false};
+ el.setPointerCapture(e.pointerId);el.addEventListener('pointermove',moveDrag);el.addEventListener('pointerup',endDrag,{once:true});el.addEventListener('pointercancel',cancelDrag,{once:true});
+}
+function moveDrag(e){if(!drag)return;drag.dx=e.clientX-drag.startX;drag.dy=e.clientY-drag.startY;if(Math.abs(drag.dx)+Math.abs(drag.dy)>7)drag.moved=true;drag.el.style.transform=`translate(${drag.dx}px,${drag.dy}px)`;}
+function cancelDrag(){if(!drag)return;drag.el.style.transform='';drag.el.classList.remove('dragging');drag.el.removeEventListener('pointermove',moveDrag);drag=null;selectedId=null;render();}
+function endDrag(e){
+ if(!drag)return;const d=drag,b=blocks.find(q=>q.id===d.id);d.el.removeEventListener('pointermove',moveDrag);d.el.style.transform='';d.el.classList.remove('dragging');
+ if(d.moved&&b){let nx=d.origX,ny=d.origY;const colDelta=d.dx/d.cellW,rowDelta=d.dy/d.cellH;if(Math.abs(colDelta)>=Math.abs(rowDelta)){nx=d.origX+Math.round(colDelta/2)*2;}else{ny=d.origY+Math.round(rowDelta/2)*2;}
+  if(canSlide(b,nx,ny)){
+   history.push({blocks:blocks.map(q=>({...q,vals:[...q.vals]})),score,mergeCount,ended});
+   b.x=nx;b.y=ny;selectedId=null;drag=null;mergeAll(b.id);render();if(checkEnd())return;say(`移動成功。${mergeCount}回マージしました。次の組み合わせを探しましょう。`);return;
+  }
+  say('そこには移動できません。空いている2×2の場所を通るルートを選んでください。');
+ }
+ selectedId=null;drag=null;render();
+}
+function candies(){const out=[];for(const b of blocks)for(let i=0;i<4;i++){const v=b.vals[i];if(v>=0)out.push({b,i,v,x:b.x+i%2,y:b.y+Math.floor(i/2)});}out.sort((a,b)=>a.y-b.y||a.x-b.x);return out;}
+function mergeAll(movedBlockId){
+ let changed=true,loops=0;
+ while(changed&&loops++<300){changed=false;const a=candies();outer:for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){
+  const p=a[i],q=a[j];
+  if(Math.abs(p.x-q.x)+Math.abs(p.y-q.y)!==1||p.v!==q.v)continue;
+  if (p.b.id === q.b.id) continue;
+  // When a merge involves the block just moved, the stationary slot receives the merge.
+  // For later chain merges not involving that block, keep the first slot as receiver.
+  const receiver = p.b.id===movedBlockId ? q : q.b.id===movedBlockId ? p : p;
+  const donor = receiver===p ? q : p;
+  // At the maximum level, both slots are emptied instead of evolving further.
+  if(p.v===sweets.length-1){p.b.vals[p.i]=-1;q.b.vals[q.i]=-1;score+=1000;}
+  else{receiver.b.vals[receiver.i]=receiver.v+1;donor.b.vals[donor.i]=-1;score+=100*(receiver.v+1);}
+  mergeCount++;
+  changed=true;
+  break outer;
+ }}
+ // Empty slots remain visibly empty; an entire wooden panel disappears once all four slots are empty.
+ blocks=blocks.filter(b=>b.vals.some(v=>v>=0));
+}
+function legalMoves(){const out=[];for(const b of blocks)for(const [dx,dy] of [[2,0],[-2,0],[0,2],[0,-2]]){let x=b.x,y=b.y;while(canPlace(x+dx,y+dy,b.id)){x+=dx;y+=dy;out.push({id:b.id,x,y});}}return out;}
+function checkEnd(){if(candies().length===0){ended=true;document.getElementById('endTitle').textContent='クリア！';document.getElementById('endText').textContent=`すべてのお菓子を消しました。スコア：${score}`;document.getElementById('overlay').style.display='flex';return true;}if(legalMoves().length===0){say('移動できるブロックがありません。最初からやり直してください。');return false;}return false;}
+function undo(){
+ if(!history.length||drag)return;
+ const prev=history.pop();
+ blocks=prev.blocks.map(b=>({...b,vals:[...b.vals]}));score=prev.score;mergeCount=prev.mergeCount;ended=prev.ended;selectedId=null;drag=null;
+ document.getElementById('overlay').style.display='none';
+ render();say('直前の移動を取り消しました。');
+}
+function hint(){if(ended)return;const a=candies();for(let i=0;i<a.length;i++)for(let j=i+1;j<a.length;j++){const p=a[i],q=a[j];if(p.v===q.v&&Math.abs(p.x-q.x)+Math.abs(p.y-q.y)===1){say(`ヒント：${sweets[p.v].e} ${sweets[p.v].n} が隣接しています。ブロックを動かしてマージを発生させましょう。`);return;}}const moves=legalMoves();if(moves.length){say('ヒント：空きスペースに接しているブロックを動かし、隣のブロックとの位置関係を変えてみましょう。');return;}say('移動できるブロックがありません。最初からやり直してください。');}
+document.getElementById('undo').addEventListener('click',undo);document.getElementById('undoEnd').addEventListener('click',undo);document.getElementById('restart').addEventListener('click',init);document.getElementById('again').addEventListener('click',init);document.getElementById('hint').addEventListener('click',hint);
+window.addEventListener('resize',()=>{if(!drag)render();});
+init();
+</script>
+</body>
+</html>
